@@ -18,6 +18,8 @@ The public app uses Manrope, Geist and Newsreader. A personal widget containing 
 | --- | --- |
 | Simple Icons service marks | CC0; exact revisions and adaptations in `app/assets/icons/SOURCES.json` and `ADDITIONAL-SOURCES.json`. The CC0 text is retained beside the icons. |
 | Disney+, ABC and SBS marks | [Custom Brand Icons](https://github.com/elax46/custom-brand-icons), MIT. The retained licence is `app/assets/icons/CUSTOM-BRAND-ICONS-LICENSE.txt`. ABC and SBS sources were replaced during the public-source review. Exact revisions, source files and extraction/recolour notes are in `SOURCES.json`. |
+| Yle Areena and MTV Katsomo marks | Simplified from Wikimedia Commons files marked public domain (`Yle_Areena_logo_2017.svg`, `MTV_Katsomo_2022.svg`). Adaptations are in `ADDITIONAL-SOURCES.json`. |
+| Ruutu mark | Retraced from Wikimedia Commons `Ruutulogo2020.png` by Nelonen, [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). `app/assets/icons/ruutu.svg` is shared under the same licence, not the project's MIT licence. |
 | Art, apps, settings and home outlines | Original CleanFrame drawings, covered by the project's MIT licence. |
 
 Brand marks identify services. Their owners retain trademark rights; this project claims no endorsement or affiliation. The older Australian TV icon archive's GPL text is retained for historical provenance only; no current icon uses that archive.

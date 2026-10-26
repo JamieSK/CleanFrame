@@ -13,7 +13,7 @@ const CATALOG = IDS.map((id, i) => ({ id, name: NAMES[i], show: true, iconPath: 
   { id: EXTRA, name: UNSAFE_NAME, show: true, iconPath: '' },
   { id: SPOTIFY, name: 'Spotify', show: true, iconPath: '' },
   { id: '5b8c3eb16b.BeamCTVDev', name: 'HBO Max', show: true, iconPath: '' },
-  { id: 'nClrkHome1.FrameHome', name: 'CleanFrame', show: true },
+  { id: 'nDZ8gLVCys.QuietTV', name: 'Quiet TV', show: true },
   { id: 'AbCdEf1234.worker', name: 'Background worker', show: true },
   { id: 'com.samsung.tv.cobalt-yt', name: 'YouTube', show: true }
 ]);
@@ -215,6 +215,37 @@ try {
     await current.reload(); await ready();
     check('Migrated preferences survive reload', (await state()).look.controls === 'text' && (await state()).dock[0] === 'netflix');
   });
+  await run('Default font, focus and saved choices', async () => {
+    await page({ seed: undefined });
+    const fresh = await state();
+    check('Fresh profile starts in Geist', fresh.look.font === 'geist' && fresh.shown.font === 'geist' && (await stored()).look.font === 'geist', fresh.look);
+    check('Fresh profile starts with Type focus', fresh.look.focus === 'type' && (await stored()).look.focus === 'type' && (await current.evaluate(() => document.getElementById('stage').classList.contains('f-type'))), fresh.look);
+    check('Geist applies to the Home clock', await current.evaluate(() => /Geist/.test(getComputedStyle(document.querySelector('.home .clock')).fontFamily)));
+    check('Settings text keeps Manrope', await current.evaluate(() => /Manrope/.test(getComputedStyle(document.body).fontFamily)));
+    await current.reload(); await ready();
+    check('Geist default survives reload', (await state()).look.font === 'geist');
+    await closePage();
+    const modern = baseline(); modern.look = { bg: 'dark', layout: 'list', apps: 'text', controls: 'both', focus: 'type', material: 'soft', font: 'manrope' };
+    await page({ seed: modern });
+    check('Saved Manrope choice is kept', (await state()).look.font === 'manrope' && (await stored()).look.font === 'manrope');
+    await closePage();
+    await page();
+    await closePage();
+    for (const focus of ['type', 'glass']) {
+      await page({ seed: undefined }); await look({ bg: 'photo', wall: 'forest', layout: 'list', focus });
+      const rows = await current.evaluate(() => {
+        const rest = getComputedStyle(document.getElementById('stage')).getPropertyValue('--br-rest').trim();
+        const control = document.querySelector('.quiet-utils .u:not(.is-focus)');
+        const groups = [...document.querySelectorAll('.ph-row')].map(r => ({ focus: r.classList.contains('is-focus'), sel: r.classList.contains('is-sel'), opacity: getComputedStyle(r.querySelector('.ph-group')).opacity }));
+        return { rest, control: control && getComputedStyle(control).opacity, groups };
+      });
+      const idle = rows.groups.filter(g => !g.focus && !g.sel);
+      check(focus + ' photo List greys unfocused apps like resting Home controls', idle.length > 0 && idle.every(g => Number(g.opacity) === Number(rows.rest)) && Number(rows.control) === Number(rows.rest) && rows.groups.some(g => g.focus && g.opacity === '1'), rows);
+      await closePage();
+    }
+    await page();
+    check('Legacy preferences without a font keep Manrope and Glass focus', (await state()).look.font === 'manrope' && (await state()).look.focus === 'glass');
+  });
   await run('Invalid preferences and saved native pins', async () => {
     await page({ seed: '{broken', legacy: baseline({ dock: ['netflix'], lastApp: 'netflix' }) });
     check('Malformed primary recovers valid legacy key', same((await state()).dock, ['netflix']));
@@ -230,6 +261,9 @@ try {
   await run('Startup fallbacks remain usable', async () => {
     await page({ noFontAPI: true });
     check('Missing font-loading API has usable baseline Home', (await state()).look.font === 'manrope' && (await call('where')).focusCount === 1);
+    await closePage();
+    await page({ seed: undefined, noFontAPI: true });
+    check('Fresh Geist default without font-loading API falls back to usable Manrope', (await state()).look.font === 'manrope' && (await stored()).look.font === 'geist' && (await call('where')).focusCount === 1);
     await closePage();
     await page({ seed: baseline({ mode: 'open' }), storageFailure: true });
     check('Failed open-mode write retains prior photo', (await state()).wallpaper === walls[0].id && (await stored()).wallpaper === walls[0].id);
@@ -252,9 +286,6 @@ try {
     await current.evaluate(() => window.dispatchEvent(new Event('focus'))); await group('samsung'); await act('samsung.home');
     await current.waitForFunction(() => __tv.calls.length === 4);
     check('Samsung escape keeps CSFS target', (await current.evaluate(() => __tv.calls.at(-1))).id === 'com.samsung.tv.csfs');
-    await current.evaluate(() => window.dispatchEvent(new Event('focus'))); await group('samsung'); await act('samsung.settings');
-    await current.waitForFunction(() => __tv.calls.length === 5);
-    check('TV settings keeps installed target', (await current.evaluate(() => __tv.calls.at(-1))).id === 'com.samsung.tv.coba.setting');
     await current.evaluate(() => { window.dispatchEvent(new Event('focus')); __tv.launchFailure = true; });
     await scene('home'); await act('home.app.netflix'); await current.waitForFunction(() => ShoreQA.where().view === 'message');
     check('Launch failure is shown', /could not|unavailable|try again/i.test(await current.locator('#stage').innerText()));
@@ -364,7 +395,7 @@ try {
     const expected = ['settings.group.background', 'settings.group.layout', 'settings.group.typography', 'settings.group.focus', 'settings.editor', 'settings.group.samsung'];
     check('Overview has all six settings groups', same((await call('actions')).filter(a => expected.includes(a)).sort(), expected.slice().sort()));
     const specs = {
-      background: { bg: ['dark', 'light', 'photo'] },
+      background: { bg: ['dark', 'light', 'photo', 'wall'] },
       layout: { layout: ['list', 'dock'], apps: ['icons', 'both', 'text'], controls: ['icons', 'both', 'text'] },
       typography: { font: (await state()).fonts.available },
       focus: { focus: ['type', 'glass'], material: ['soft', 'frost', 'tint'] }
@@ -391,7 +422,7 @@ try {
     check('Rotation Back restores its Background row', (await state()).settingsGroup === 'background' && (await state()).focusAction === 'background.rotation', await call('where'));
     await group('samsung');
     const samsungActions = await call('actions');
-    check('Samsung group shows both native actions', samsungActions.includes('samsung.home') && samsungActions.includes('samsung.settings'));
+    check('Samsung group shows only the Samsung Home action', samsungActions.includes('samsung.home') && !samsungActions.includes('samsung.settings'));
   });
   await run('Settings focus never changes the applied Home', async () => {
     await page();
@@ -433,7 +464,7 @@ try {
   await run('Settings OK applies explicit choices atomically', async () => {
     await page();
     const specs = [
-      ['background', 'bg', ['dark', 'light', 'photo']],
+      ['background', 'bg', ['dark', 'light', 'photo', 'wall']],
       ['layout', 'layout', ['list', 'dock']],
       ['layout', 'apps', ['icons', 'text', 'both']],
       ['layout', 'controls', ['text', 'both', 'icons']],
@@ -493,7 +524,7 @@ try {
   });
   await run('Settings inactive photo tools retain wallpaper preferences', async () => {
     await page();
-    for (const bg of ['dark', 'light']) {
+    for (const bg of ['dark', 'light', 'wall']) {
       await look({ bg }); await group('background'); const before = await settingsSnapshot();
       for (const action of ['background.wallpaper', 'background.rotation']) {
         check(bg + ' marks ' + action + ' inactive', await current.locator('[data-action="' + action + '"]').getAttribute('aria-disabled') === 'true');
@@ -645,14 +676,12 @@ try {
   });
   await run('Wallpaper applies in place and Back keeps the latest applied photo', async () => {
     await page(); await wallpaper(); const before = await wallpaperSaved();
-    check('Applied wallpaper omits the redundant Apply hint', !/apply.*photo/i.test(await current.locator('#appearanceDesc').innerText()));
+    check('Wallpaper shows no OK hint', (await current.locator('.remote-key, #appearanceDesc').count()) === 0);
     await nav('down'); await wallpaperSettled(walls[1].id);
     check('A browsed photo is not saved by focus', same(await wallpaperSaved(), before));
-    check('Unsaved preview explains the OK action', /apply.*photo/i.test(await current.locator('#appearanceDesc').innerText()));
     await nav('ok'); await ready();
     const applied = await wallpaperSaved();
     check('OK applies once while staying inside Wallpaper', (await state()).view === 'wallpaper' && applied.committed.wall === walls[1].id && applied.writes === before.writes + 1 && applied.attempts === before.attempts + 1 && same(await wallpaperApplied(), ['wallpaper.choose.' + walls[1].id]));
-    check('Successful apply clears its redundant Apply hint', !/apply.*photo/i.test(await current.locator('#appearanceDesc').innerText()));
     check('Applied photo updates the committed Settings backdrop', applied.backdrop.src.includes('/' + walls[1].id + '-panel.jpg'));
     await nav('ok'); await current.keyboard.down('Enter'); await current.keyboard.down('Enter'); await current.keyboard.up('Enter');
     check('Repeated OK on the applied photo is a no-op', same(await wallpaperSaved(), applied));
@@ -671,7 +700,6 @@ try {
     await page(); await wallpaper(); const before = await wallpaperSaved();
     await nav('up');
     check('Up from the first wallpaper reaches Back without wrapping', (await state()).focusAction === 'wallpaper.back' && (await state()).shown.wall === walls[0].id);
-    check('Back still shows its return hint', /background|return/i.test(await current.locator('#appearanceDesc').innerText()));
     await nav('down');
     check('Down from Back restores the current candidate', (await state()).focusAction === 'wallpaper.choose.' + walls[0].id);
     await nav(...Array(walls.length - 1).fill('down')); await wallpaperSettled(walls.at(-1).id); await wallpaperRowVisible(walls.at(-1).id);
@@ -836,7 +864,7 @@ try {
     const focus = (await state()).focusAction; await current.keyboard.press('ArrowDown');
     check('Warm return restores remote focus', (await state()).focusAction !== focus && (await call('where')).focusCount === 1);
     const clock = await current.locator('#caption .clock').textContent();
-    check('Live 12-hour clock has no AM/PM', /^\s*\d{1,2}:\d{2}\s*$/.test(clock), clock);
+    check('Live 24-hour clock has no AM/PM', /^\s*([01]\d|2[0-3]):[0-5]\d\s*$/.test(clock), clock);
   });
   await run('Open rotation and browser fallback', async () => {
     await page({ seed: baseline({ mode: 'open' }) }); check('Open mode advances at cold start', (await state()).wallpaper === walls[1].id);

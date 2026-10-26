@@ -1,5 +1,12 @@
-"""Build and sign with the workspace-local official Tizen SDK (macOS)."""
+"""Build and sign with the workspace-local official Tizen SDK (macOS).
+
+An optional ignored .local/signing.json names another owner's profile:
+{"profile": "<name>", "profiles": "<path to profiles.xml>"}. Without a saved
+certificate-password.txt, the SDK uses the profile's saved passwords or prompts
+in this terminal.
+"""
 from pathlib import Path
+import json
 import os
 import pty
 import select
@@ -14,27 +21,37 @@ ROOT = Path(__file__).resolve().parents[1]
 SDK = ROOT / '.local/tizen-sdk'
 PRIVATE = ROOT / '.local/certificates/private'
 CLI = SDK / 'tools/ide/bin/tizen'
+signing_file = ROOT / '.local/signing.json'
+signing = json.loads(signing_file.read_text()) if signing_file.exists() else {}
+profile_name = signing.get('profile', 'FrameHome')
 password_file = PRIVATE / 'certificate-password.txt'
-if not CLI.exists() or not password_file.exists():
-    raise SystemExit('Local SDK or signing credentials missing. See docs/development.md.')
-password = password_file.read_bytes().strip()
-if not password:
+if not CLI.exists():
+    raise SystemExit('Local SDK missing. See docs/development.md.')
+password = password_file.read_bytes().strip() if password_file.exists() else None
+if password == b'':
     raise SystemExit('Signing password is empty.')
 dist = ROOT / 'dist'
 dist.mkdir(exist_ok=True)
 data = SDK / 'data'
 data.mkdir(exist_ok=True)
 (SDK / 'sdk.info').write_text('TIZEN_SDK_INSTALLED_PATH=' + str(SDK) + '\nTIZEN_SDK_DATA_PATH=' + str(data) + '\nJDK_PATH=' + str(SDK / 'jdk') + '\n')
-profile = PRIVATE / 'profiles.xml'
-tree = XML.parse(profile)
-for item in tree.getroot().iter('profileitem'):
-    for key in ['key', 'ca', 'rootca']:
-        value = item.get(key)
-        if value:
-            folder = PRIVATE if key == 'key' else PRIVATE.parent / 'ca'
-            item.set(key, str(folder / Path(value).name))
-tree.write(profile, encoding='UTF-8', xml_declaration=True)
+if 'profiles' in signing:
+    profile = Path(signing['profiles'])
+    if not profile.exists():
+        raise SystemExit('Signing profile file missing: ' + str(profile))
+else:
+    profile = PRIVATE / 'profiles.xml'
+    tree = XML.parse(profile)
+    for item in tree.getroot().iter('profileitem'):
+        for key in ['key', 'ca', 'rootca']:
+            value = item.get(key)
+            if value:
+                folder = PRIVATE if key == 'key' else PRIVATE.parent / 'ca'
+                item.set(key, str(folder / Path(value).name))
+    tree.write(profile, encoding='UTF-8', xml_declaration=True)
 profile.chmod(0o600)
+if not any(item.get('name') == profile_name for item in XML.parse(profile).getroot().iter('profile')):
+    raise SystemExit('Profile ' + profile_name + ' not found in ' + str(profile))
 result = subprocess.run([str(CLI), 'cli-config', 'default.profiles.path=' + str(profile)], capture_output=True, timeout=30)
 if result.returncode:
     raise SystemExit('SDK signing profile configuration failed.')
@@ -42,43 +59,49 @@ unsigned = dist / 'CleanFrame-unsigned.wgt'
 write_widget_archive(unsigned)
 signed_dir = dist / 'signed'
 signed_dir.mkdir(exist_ok=True)
-command = [str(CLI), 'package', '-t', 'wgt', '-s', 'FrameHome', '-o', str(signed_dir), '--', str(unsigned)]
-pid, terminal = pty.fork()
-if pid == 0:
-    os.execv(command[0], command)
-output = b''
-passwords = saves = 0
-deadline = time.monotonic() + 60
-try:
-    while time.monotonic() < deadline:
-        ready, _, _ = select.select([terminal], [], [], 1)
-        if ready:
-            try:
-                chunk = os.read(terminal, 8192)
-            except OSError:
-                break
-            if not chunk:
-                break
-            output += chunk
-            count = output.lower().count(b'password:')
-            if count > passwords:
-                os.write(terminal, password + b'\n')
-                passwords = count
-            count = output.count(b'No: (N) ?')
-            if count > saves:
-                os.write(terminal, b'n\n')
-                saves = count
-    else:
-        os.kill(pid, signal.SIGTERM)
-        raise SystemExit('SDK signing timed out.')
-finally:
-    os.close(terminal)
-os.waitpid(pid, 0)
-redacted = output.replace(password, b'[redacted]').decode(errors='replace')
-if 'is created successfully' not in redacted:
-    print(redacted)
-    raise SystemExit('SDK did not confirm a signed package.')
+command = [str(CLI), 'package', '-t', 'wgt', '-s', profile_name, '-o', str(signed_dir), '--', str(unsigned)]
 signed = signed_dir / unsigned.name
+if signed.exists():
+    signed.unlink()
+if password is None:
+    if subprocess.run(command, timeout=300).returncode or not signed.exists():
+        raise SystemExit('SDK did not create a signed package.')
+else:
+    pid, terminal = pty.fork()
+    if pid == 0:
+        os.execv(command[0], command)
+    output = b''
+    passwords = saves = 0
+    deadline = time.monotonic() + 60
+    try:
+        while time.monotonic() < deadline:
+            ready, _, _ = select.select([terminal], [], [], 1)
+            if ready:
+                try:
+                    chunk = os.read(terminal, 8192)
+                except OSError:
+                    break
+                if not chunk:
+                    break
+                output += chunk
+                count = output.lower().count(b'password:')
+                if count > passwords:
+                    os.write(terminal, password + b'\n')
+                    passwords = count
+                count = output.count(b'No: (N) ?')
+                if count > saves:
+                    os.write(terminal, b'n\n')
+                    saves = count
+        else:
+            os.kill(pid, signal.SIGTERM)
+            raise SystemExit('SDK signing timed out.')
+    finally:
+        os.close(terminal)
+    os.waitpid(pid, 0)
+    redacted = output.replace(password, b'[redacted]').decode(errors='replace')
+    if 'is created successfully' not in redacted:
+        print(redacted)
+        raise SystemExit('SDK did not confirm a signed package.')
 with zipfile.ZipFile(signed) as package:
     if not {'author-signature.xml', 'signature1.xml'}.issubset(package.namelist()):
         raise SystemExit('Package is missing its signing files.')

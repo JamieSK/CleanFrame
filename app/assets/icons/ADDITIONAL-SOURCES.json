@@ -16,5 +16,29 @@
     "source": "https://github.com/simple-icons/simple-icons/blob/develop/icons/tubi.svg",
     "licence": "CC0-1.0",
     "note": "Shape unchanged; white fill for launcher."
+  },
+  {
+    "icon": "viaplay",
+    "source": "https://github.com/simple-icons/simple-icons/blob/16.36.0/icons/viaplay.svg",
+    "licence": "CC0-1.0",
+    "note": "Shape unchanged; white fill for launcher."
+  },
+  {
+    "icon": "yleareena",
+    "source": "https://commons.wikimedia.org/wiki/File:Yle_Areena_logo_2017.svg",
+    "licence": "Public domain (Wikimedia Commons, Yleisradio); trademark remains with Yle",
+    "note": "Yle tile with its letters knocked out; AREENA wordmark omitted. Paths flattened to absolute coordinates; white fill."
+  },
+  {
+    "icon": "mtvkatsomo",
+    "source": "https://commons.wikimedia.org/wiki/File:MTV_Katsomo_2022.svg",
+    "licence": "Public domain (Wikimedia Commons, MTV Oy); trademark remains with MTV",
+    "note": "Round badge with mtv knocked out; the small katsomo line is omitted for legibility. White fill."
+  },
+  {
+    "icon": "ruutu",
+    "source": "https://commons.wikimedia.org/wiki/File:Ruutulogo2020.png (Nelonen)",
+    "licence": "CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); this derived icon is shared under the same licence; trademark remains with Nelonen",
+    "note": "Bracket element retraced by hand as a 26-unit centre-line stroke (slightly heavier than the source for launcher weight); wordmark letters omitted."
   }
 ]
