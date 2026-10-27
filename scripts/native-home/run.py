@@ -2,7 +2,7 @@ from pathlib import Path
 import sys, base64, ipaddress, json, os, socket, subprocess, time, uuid, urllib.request
 r=Path(__file__).resolve().parents[2]; d=r/'.local/native-home'
 mode=sys.argv[1] if len(sys.argv)>1 else 'query'
-if mode not in ['query','apply','restore','inspect']:raise SystemExit('Unknown action')
+if mode not in ['query','apply','restore','inspect','artbright','artwrite','artrestore','photowrite']:raise SystemExit('Unknown action')
 host=json.loads((r/'.local/device.json').read_text())['host'];ipaddress.ip_address(host)
 with urllib.request.urlopen('http://'+host+':8001/api/v2/',timeout=4) as response: info=json.load(response)
 if info.get('device',{}).get('modelName')!='QE43LS03FAUXXH':raise SystemExit('Model guard failed; nothing staged.')
@@ -13,8 +13,9 @@ def run(args,timeout=12):
  return p
 run(['connect',serial])
 # Re-stage reviewed helper files on each run so rollback survives SDK temporary-file cleanup.
-# 'inspect' is a pure-shell read-only probe and does not use the compiled helper.
-if mode!='inspect':
+# 'inspect'/'artbright' are read-only probes; 'artwrite'/'artrestore' are reviewed brightness
+# vconf writes. None of these use the compiled native-home helper.
+if mode not in ('inspect','artbright','artwrite','artrestore','photowrite'):
     for suffix in ['dll','runtimeconfig.json','deps.json']:
         source=d/'out'/('CleanFrameHomeControl.'+suffix)
         run(['-s',serial,'push',str(source),'/home/owner/share/tmp/sdk_tools/CleanFrameHomeControl.'+suffix])
