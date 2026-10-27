@@ -57,6 +57,8 @@ Use the staged [Samsung The Frame setup guide](docs/agent-tv-setup-guide.md) to 
 
 The signing and TV scripts are specific to my setup. Your agent will need to adapt the paths, signing profile, identity checks and installed-app IDs, then verify each stage with you. Installing the app and assigning the remote Home button are separate steps.
 
+This fork's Samsung author and distributor certificates are kept in Google Drive, not in the repository. Copy them into the ignored `.local/` folder before packaging.
+
 | Area | Evidence and limits |
 | --- | --- |
 | Reference hardware | Samsung QA55LS03DAWXXY / LS03D, firmware 2130.0, Tizen 9.0, 32-bit ARM |
